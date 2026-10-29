@@ -424,10 +424,12 @@ function load(){
   return call("get_values",{spreadsheetId:SHEET_ID,range:TAB+"A3:D"}).then(function(res){
     var rows=[];
     valuesOf(res).forEach(function(v,i){var r=parseRow(v,i+3);if(r)rows.push(r)});
+    lsGet("gastos-queue",[]).forEach(function(q,i){rows.push({id:900000000+i,date:q.date,cat:q.cat,desc:q.desc,value:q.value,pend:true})});
     rows.sort(function(a,b){return ordKey(a)<ordKey(b)?1:-1});
     S.rows=rows;S.loaded=true;S.failed=false;
-    var d=new Date();$("stamp").textContent="Atualizado "+pad(d.getHours())+":"+pad(d.getMinutes());
-    setConn("");renderAll();
+    var d=new Date();$("stamp").textContent=OFF?"Offline":"Atualizado "+pad(d.getHours())+":"+pad(d.getMinutes());
+    var nq=lsGet("gastos-queue",[]).length;
+    setConn(OFF?"Sem internet. Mostrando os dados salvos no aparelho."+(nq?" "+nq+" a enviar.":""):"");renderAll();
   },function(e){S.loaded=true;S.failed=true;setConn(errText(e));$("stamp").textContent="Sem conexão";renderAll()});
 }
 function add(cat,desc,value,date){
@@ -435,7 +437,31 @@ function add(cat,desc,value,date){
   return call("get_values",{spreadsheetId:SHEET_ID,range:TAB+"A3:D"}).then(function(res){
     var n=3+valuesOf(res).length;
     return call("update_values",{spreadsheetId:SHEET_ID,range:TAB+"A"+n+":D"+n,values:[[serial(date),cat,txt(desc),value]]});
-  }).then(function(){load();return true},function(e){toast(errText(e),true);return false});
+  }).then(function(){load();return true},function(e){
+    if(isNet(e)){
+      var q=lsGet("gastos-queue",[]);q.push({date:date,cat:cat,desc:desc,value:value});lsSet("gastos-queue",q);
+      OFF=true;load();return true;
+    }
+    toast(errText(e),true);return false;
+  });
+}
+var flushing=false;
+function flushQueue(){
+  var q=lsGet("gastos-queue",[]);
+  if(flushing||!q.length||!mcp)return Promise.resolve();
+  flushing=true;
+  function next(){
+    var q=lsGet("gastos-queue",[]);
+    if(!q.length)return Promise.resolve(true);
+    var it=q[0];
+    return apiNet("get_values",{range:TAB+"A3:D"}).then(function(res){
+      var n=3+valuesOf(res).length;
+      return apiNet("update_values",{range:TAB+"A"+n+":D"+n,values:[[serial(it.date),it.cat,txt(it.desc),it.value]]});
+    }).then(function(){
+      var q2=lsGet("gastos-queue",[]);q2.shift();lsSet("gastos-queue",q2);return next();
+    });
+  }
+  return next().then(function(){flushing=false;toast("✅ Lançamentos enviados para a planilha.");return load()},function(){flushing=false});
 }
 function rowCheck(r){
   return call("get_values",{spreadsheetId:SHEET_ID,range:TAB+"A"+r.id+":D"+r.id}).then(function(res){
@@ -582,7 +608,7 @@ function itemHtml(r){
     if(S.del===r.id)acts='<div class="acts"><div class="q">Excluir este lançamento da planilha?</div><button class="btn sm bad" data-a="del2">Excluir</button><button class="btn sm ghost" data-a="cancel">Cancelar</button></div>';
     else acts='<div class="acts"><button class="btn sm" data-a="edit">Editar</button><button class="btn sm ghost" data-a="del">Excluir</button></div>';
   }
-  return '<div class="item" data-id="'+r.id+'"><button class="item-main" data-a="open" aria-expanded="'+(S.open===r.id)+'"><span class="dsc"><b>'+esc(r.desc)+"</b><small>"+(EMO[r.cat]||"")+" "+esc(r.cat)+'</small></span><span class="val">'+money(r.value)+"</span></button>"+acts+"</div>";
+  return '<div class="item" data-id="'+r.id+'"><button class="item-main" data-a="'+(r.pend?"pend":"open")+'" aria-expanded="'+(S.open===r.id)+'"><span class="dsc"><b>'+esc(r.desc)+"</b><small>"+(r.pend?"⏳ aguardando internet · ":"")+(EMO[r.cat]||"")+" "+esc(r.cat)+'</small></span><span class="val">'+money(r.value)+"</span></button>"+acts+"</div>";
 }
 function editHtml(r){
   return '<div class="item edit" data-id="'+r.id+'"><div class="row"><input type="date" id="e-d" value="'+r.date+'" aria-label="Data"><input type="text" id="e-v" inputmode="decimal" value="'+String(r.value).replace(".",",")+'" aria-label="Valor" style="text-align:right"></div><select id="e-c" aria-label="Categoria">'+catOptions(r.cat)+'</select><input type="text" id="e-s" value="'+esc(r.desc)+'" aria-label="Descrição"><div class="btns"><button class="btn" data-a="save">Salvar</button><button class="btn ghost" data-a="cancel">Cancelar</button></div></div>';
@@ -1110,7 +1136,20 @@ $("qdate").value=todayISO();markDq();
 renderChips();renderList();showTab(S.tab);
 var CFG=null;
 try{CFG=JSON.parse(localStorage.getItem("gastos-cfg")||"null")}catch(e){}
+var OFF=false;
+function lsGet(k,d){try{var v=JSON.parse(localStorage.getItem(k)||"null");return v==null?d:v}catch(e){return d}}
+function lsSet(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
+function isNet(e){return !!e&&(e.code==="server_unavailable"||e.code==="upstream_error")}
 function apiCall(tool,input){
+  if(tool!=="get_values")return apiNet(tool,input);
+  return apiNet(tool,input).then(function(r){
+    OFF=false;var c=lsGet("gastos-cache",{});c[input.range]=r.payload.values;lsSet("gastos-cache",c);return r;
+  },function(e){
+    if(isNet(e)){var c=lsGet("gastos-cache",{});if(c[input.range]){OFF=true;return{payload:{values:c[input.range]}}}}
+    throw e;
+  });
+}
+function apiNet(tool,input){
   if(!CFG||!CFG.url||!CFG.token)return Promise.reject({code:"no_config"});
   var b={token:CFG.token};
   if(tool==="get_values"){b.op="get";b.range=input.range}
@@ -1128,10 +1167,11 @@ var started=false;
 function startApp(){
   mcp={callTool:function(srv,tool,input){return apiCall(tool,input)}};
   $("setup").hidden=true;
-  load();loadP();loadM();
+  flushQueue().then(function(){load();loadP();loadM()});
   if(!started){
     started=true;
-    var tick=function(){if(document.hidden||S.edit||S.pe||S.metaEdit||S.pc)return;load();if(S.tab==="p")loadP()};
+    var tick=function(){if(document.hidden||S.edit||S.pe||S.metaEdit||S.pc)return;flushQueue().then(function(){load();if(S.tab==="p")loadP()})};
+    window.addEventListener("online",tick);
     setInterval(tick,30000);
     document.addEventListener("visibilitychange",tick);
   }
@@ -1158,6 +1198,7 @@ $("cfgsave").addEventListener("click",function(){
     m.className="toast err";
   });
 });
+if("serviceWorker" in navigator){window.addEventListener("load",function(){navigator.serviceWorker.register("sw.js").catch(function(){})})}
 if(CFG&&CFG.url&&CFG.token)startApp();
 else{S.loaded=true;S.failed=true;$("stamp").textContent="Sem conexão";renderList();showSetup()}
 })();
