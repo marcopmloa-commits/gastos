@@ -2,10 +2,10 @@
 <html lang="pt-BR"><head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#DEE2E8">
+<meta name="theme-color" content="#2F5D73">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="GASTOS">
 <link rel="apple-touch-icon" href="icon.png">
 <link rel="icon" href="icon.png">
@@ -16,10 +16,10 @@
 <style>
 /* Layout: app de celular em coluna única (até 560px): barra de título fixa, conteúdo rolando na vertical, navegação por abas fixa embaixo. Nada rola para o lado. */
 :root{
-  --bg:#D2D6DD; --surface:#E9ECF0; --ink:#1B2026; --muted:#525C6A; --line:#BFC5CE;
-  --head:#DEE2E8; --head2:#37404D; --head-ink:#1B2026; --head-muted:#525C6A;
-  --gold:#A3ADBA; --gold-ink:#37404D; --bar:#5F6B7B; --gold-soft:#DCE0E6; --track:#C6CCD5;
-  --bad:#B3392F; --chip:#DADEE4; --chip-on:#37404D; --chip-on-ink:#FFFFFF;
+  --bg:#DCE1E7; --surface:#F1F3F6; --ink:#1B2026; --muted:#566170; --line:#C6CDD6;
+  --head:#2F5D73; --head2:#2F5D73; --head-ink:#FFFFFF; --head-muted:#C5D8E2;
+  --gold:#2F5D73; --gold-ink:#2F5D73; --bar:#3E7690; --gold-soft:#E3EAF0; --track:#CBD3DC;
+  --bad:#B3392F; --chip:#E3E8EE; --chip-on:#2F5D73; --chip-on-ink:#FFFFFF;
   --font-display:'Bricolage Grotesque','Segoe UI',system-ui,sans-serif;
   --font-body:'IBM Plex Sans','Segoe UI',system-ui,sans-serif;
   --font-mono:'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace;
@@ -51,7 +51,7 @@ section{display:grid;gap:12px;min-width:0}
 
 input,select{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:11px 12px;width:100%;min-width:0;font-size:16px}
 .btn{background:var(--head2);color:#fff;border:0;border-radius:10px;padding:12px 16px;font-weight:600}
-.btn.gold{background:var(--gold);color:#14222F}
+.btn.gold{background:var(--gold);color:#FFFFFF}
 .btn.ghost{background:none;border:1px solid var(--line);color:var(--ink)}
 .btn.sm{padding:8px 12px;font-size:14px}
 .btn.bad{background:var(--bad);color:#fff}
@@ -98,7 +98,7 @@ input,select{background:var(--bg);border:1px solid var(--line);border-radius:10p
 
 /* resumo */
 .sel{display:grid;grid-template-columns:1fr 100px;gap:8px}
-.total{margin-top:12px;background:var(--gold);color:#14222F;border-radius:12px;padding:12px 16px;display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.total{margin-top:12px;background:var(--gold);color:#FFFFFF;border-radius:12px;padding:12px 16px;display:flex;justify-content:space-between;align-items:baseline;gap:8px}
 .total span{font-size:12px;font-weight:600;letter-spacing:.07em;text-transform:uppercase}
 .total b{font:700 26px/1.1 var(--font-display);font-variant-numeric:tabular-nums;white-space:nowrap}
 .cats{display:grid;gap:12px;margin-top:14px}
@@ -122,7 +122,7 @@ input,select{background:var(--bg);border:1px solid var(--line);border-radius:10p
 .mx th button{background:none;border:0;color:inherit;font:inherit;letter-spacing:inherit;padding:0}
 .mx th:first-child,.mx td:first-child{position:sticky;left:0;z-index:1;text-align:left;border-right:1px solid var(--line)}
 .mx td:first-child{background:var(--surface);font-family:var(--font-body)}
-.mx th.cur{background:var(--gold);color:#14222F}
+.mx th.cur{background:var(--gold);color:#FFFFFF}
 .mx td.cur{background:var(--gold-soft)}
 .mx td.zero{color:var(--muted)}
 .mx tfoot td{font-weight:600;border-top:2px solid var(--gold);border-bottom:0}
@@ -181,7 +181,7 @@ pre.msg{margin:10px 0 0;background:var(--bg);border:1px solid var(--line);border
 .ck{flex:none;position:relative;width:48px;height:48px;margin-left:2px;border:0;background:none;padding:0}
 .ck::before{content:"";position:absolute;inset:10px;border-radius:50%;border:2px solid var(--muted)}
 .ck[aria-pressed="true"]::before{background:var(--gold);border-color:var(--gold)}
-.ck[aria-pressed="true"]::after{content:"✓";position:absolute;inset:0;display:grid;place-items:center;color:#14222F;font-weight:700;font-size:15px}
+.ck[aria-pressed="true"]::after{content:"✓";position:absolute;inset:0;display:grid;place-items:center;color:#FFFFFF;font-weight:700;font-size:15px}
 .item.paid .dsc b{text-decoration:none}
 .chk{display:flex;align-items:center;gap:10px;font-size:15px}
 .chk input{width:20px;height:20px;padding:0;accent-color:var(--gold)}
@@ -192,7 +192,7 @@ pre.msg{margin:10px 0 0;background:var(--bg);border:1px solid var(--line);border
 .big{border:0;border-radius:12px;padding:12px 14px;display:grid;gap:4px;align-content:start;text-align:left;min-width:0;font:inherit}
 .big span{font-size:10.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase}
 .big b{font:700 21px/1.1 var(--font-display);font-variant-numeric:tabular-nums;white-space:nowrap}
-.big.gold{background:var(--gold);color:#14222F}
+.big.gold{background:var(--gold);color:#FFFFFF}
 .big.navy{background:var(--head2);color:#fff;cursor:pointer}
 .big.neg{background:var(--bad);color:#fff}
 
@@ -203,7 +203,7 @@ pre.msg{margin:10px 0 0;background:var(--bg);border:1px solid var(--line);border
 .nav-in{display:flex;width:100%;max-width:560px}
 .tab{flex:1;background:none;border:0;color:var(--head-muted);padding:9px 8px 10px;display:grid;justify-items:center;gap:2px;font-size:12px;font-weight:600;border-top:3px solid transparent}
 .tab svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
-.tab[aria-selected="true"]{color:var(--head-ink);border-top-color:var(--head2)}
+.tab[aria-selected="true"]{color:#2F5D73;border-top-color:var(--head2)}
 @media (prefers-reduced-motion:no-preference){.cat .t i,.mrow .t i{transition:width .25s ease}}
 </style>
 
