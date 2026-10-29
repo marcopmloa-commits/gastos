@@ -2,10 +2,10 @@
 <html lang="pt-BR"><head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#3B7BB0">
+<meta name="theme-color" content="#ECEEF1">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="GASTOS">
 <link rel="apple-touch-icon" href="icon.png">
 <link rel="icon" href="icon.png">
@@ -16,10 +16,10 @@
 <style>
 /* Layout: app de celular em coluna única (até 560px): barra de título fixa, conteúdo rolando na vertical, navegação por abas fixa embaixo. Nada rola para o lado. */
 :root{
-  --bg:#F5F9FD; --surface:#FFFFFF; --ink:#1F2D3A; --muted:#66788A; --line:#E1EAF3;
-  --head:#3B7BB0; --head2:#2F6A9C; --head-ink:#FFFFFF; --head-muted:#D6E6F5;
-  --gold:#A9CCE8; --gold-ink:#24557F; --bar:#4F8CC0; --gold-soft:#E6F0FA; --track:#E3ECF5;
-  --bad:#B3392F; --chip:#EAF2FA; --chip-on:#2F6A9C; --chip-on-ink:#FFFFFF;
+  --bg:#F3F4F6; --surface:#FFFFFF; --ink:#1F2328; --muted:#6B7280; --line:#E3E5E9;
+  --head:#ECEEF1; --head2:#3A4350; --head-ink:#1F2328; --head-muted:#6B7280;
+  --gold:#B9C0CA; --gold-ink:#3A4350; --bar:#6B7785; --gold-soft:#EDEFF2; --track:#E6E8EC;
+  --bad:#B3392F; --chip:#EDEFF2; --chip-on:#3A4350; --chip-on-ink:#FFFFFF;
   --font-display:'Bricolage Grotesque','Segoe UI',system-ui,sans-serif;
   --font-body:'IBM Plex Sans','Segoe UI',system-ui,sans-serif;
   --font-mono:'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace;
@@ -36,6 +36,7 @@ button{cursor:pointer;-webkit-tap-highlight-color:transparent}
 .top{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--head);color:var(--head-ink);
   padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
 body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);background:var(--head);z-index:30}
+.top{border-bottom:1px solid var(--line)}
 .top-in{max-width:560px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:12px;padding-block:12px}
 .top h1{font:700 18px/1.1 var(--font-display);margin:0;letter-spacing:.01em}
 .top .who{font-size:12px;color:var(--head-muted);font-family:var(--font-mono)}
@@ -159,9 +160,9 @@ pre.msg{margin:10px 0 0;background:var(--bg);border:1px solid var(--line);border
 .bv{fill:var(--ink);font:500 11px var(--font-mono)}
 .fx{display:flex;align-items:center;gap:10px;padding:10px 2px;border-bottom:1px solid var(--line)}
 .fx:last-child{border-bottom:0}.fx .dsc{flex:1}
-.snack{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(76px + env(safe-area-inset-bottom,0px));z-index:25;background:var(--head);color:#fff;border:1px solid var(--head2);border-radius:12px;padding:10px 14px;display:flex;gap:16px;align-items:center;max-width:calc(100% - 32px);box-shadow:0 4px 16px rgba(0,0,0,.3)}
+.snack{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(76px + env(safe-area-inset-bottom,0px));z-index:25;background:var(--head2);color:#fff;border:1px solid var(--head2);border-radius:12px;padding:10px 14px;display:flex;gap:16px;align-items:center;max-width:calc(100% - 32px);box-shadow:0 4px 16px rgba(0,0,0,.3)}
 .snack[hidden]{display:none}
-.snack button{background:none;border:0;color:var(--gold);font-weight:700;padding:4px}
+.snack button{background:none;border:0;color:#D5DAE1;font-weight:700;padding:4px}
 
 .pmini button{background:var(--bg);border:0;border-radius:10px;padding:6px 8px;display:grid;text-align:left;width:100%;min-width:0}
 .cedit{margin-top:12px;display:grid;gap:8px}
@@ -198,10 +199,11 @@ pre.msg{margin:10px 0 0;background:var(--bg);border:1px solid var(--line);border
 /* navegação inferior */
 .nav{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--head);display:flex;justify-content:center;
   padding-bottom:env(safe-area-inset-bottom,0px);padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px)}
+.nav{border-top:1px solid var(--line)}
 .nav-in{display:flex;width:100%;max-width:560px}
 .tab{flex:1;background:none;border:0;color:var(--head-muted);padding:9px 8px 10px;display:grid;justify-items:center;gap:2px;font-size:12px;font-weight:600;border-top:3px solid transparent}
 .tab svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
-.tab[aria-selected="true"]{color:var(--head-ink);border-top-color:var(--gold)}
+.tab[aria-selected="true"]{color:var(--head-ink);border-top-color:var(--head2)}
 @media (prefers-reduced-motion:no-preference){.cat .t i,.mrow .t i{transition:width .25s ease}}
 </style>
 
