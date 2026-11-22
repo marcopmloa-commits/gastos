@@ -154,6 +154,7 @@ function fmtDia(d){
 
 // ---------- cálculo: saldo corrido entre os casais (cada compra abate o que o outro deve)
 const lista = v => (Array.isArray(v) ? v : String(v || '').split(',')).map(x => String(x).trim()).filter(Boolean);
+const EPS = 0.05; // diferenças de até 5 centavos (arredondamento) contam como zero
 function calc(rows){
   const ids = S.cfg.casais.map(c => c.id);
   const m = {}; ids.forEach(a => { m[a] = {}; ids.forEach(b => m[a][b] = 0); }); // m[a][b] = quanto a deve a b (bruto)
@@ -177,10 +178,29 @@ function calc(rows){
   const pares = [], saldo = {}; ids.forEach(i => saldo[i] = 0);
   ids.forEach((a, x) => ids.slice(x + 1).forEach(b => {
     const n = m[a][b] - m[b][a];
-    if (Math.abs(n) > 0.005) pares.push(n > 0 ? {de:a, para:b, v:n} : {de:b, para:a, v:-n});
+    if (n > 0) pares.push({de:a, para:b, v:n}); else if (n < 0) pares.push({de:b, para:a, v:-n});
     saldo[a] -= n; saldo[b] += n;
   }));
-  return {total, pares, saldo, gastoPor, acertos, m};
+  // tira dívidas em círculo (A deve B, B deve C, C deve A): o menor valor se cancela nos três
+  const acha = (de, para) => pares.find(p => p.de === de && p.para === para && p.v > EPS);
+  for (const p1 of pares) for (const p2 of pares) {
+    if (p1.v <= EPS || p2.v <= EPS || p2.de !== p1.para) continue;
+    const p3 = acha(p2.para, p1.de); if (!p3) continue;
+    const v = Math.min(p1.v, p2.v, p3.v); p1.v -= v; p2.v -= v; p3.v -= v;
+  }
+  for (let i = pares.length - 1; i >= 0; i--) if (pares[i].v <= EPS) pares.splice(i, 1);
+  // sugestão mais simples: menos transferências possível, a partir do saldo de cada um
+  const dev = ids.filter(i => saldo[i] < -EPS).map(i => ({id:i, v:-saldo[i]})).sort((x, y) => y.v - x.v);
+  const cre = ids.filter(i => saldo[i] > EPS).map(i => ({id:i, v:saldo[i]})).sort((x, y) => y.v - x.v);
+  const simples = [];
+  for (let x = 0, y = 0; x < dev.length && y < cre.length;) {
+    const v = Math.min(dev[x].v, cre[y].v);
+    if (v > EPS) simples.push({de:dev[x].id, para:cre[y].id, v});
+    dev[x].v -= v; cre[y].v -= v;
+    if (dev[x].v <= EPS) x++; if (cre[y].v <= EPS) y++;
+  }
+  ids.forEach(i => { if (Math.abs(saldo[i]) <= EPS) saldo[i] = 0; });
+  return {total, pares, saldo, gastoPor, acertos, m, simples};
 }
 
 // ---------- rede
@@ -299,8 +319,8 @@ function telaResumo(){
       <button class="btn sm" data-act="acertar" data-de="${esc(p.de)}" data-para="${esc(p.para)}" data-v="${p.v.toFixed(2)}">Pagar</button></div>`;
   const ext = S.cfg.casais.filter(k => k.id !== sel).map(k => {
     const deve = c.m[sel][k.id], recebe = c.m[k.id][sel];
-    if (Math.abs(deve) < 0.005 && Math.abs(recebe) < 0.005) return '';
-    return `<tr><td>${esc(k.nome)}</td><td>${brl(recebe)}</td><td>${brl(deve)}</td><td class="${recebe - deve > 0.005 ? 'pos' : recebe - deve < -0.005 ? 'neg' : ''}">${brl(recebe - deve)}</td></tr>`;
+    if (Math.abs(deve) <= EPS && Math.abs(recebe) <= EPS) return '';
+    return `<tr><td>${esc(k.nome)}</td><td>${brl(recebe)}</td><td>${brl(deve)}</td><td class="${recebe - deve > EPS ? 'pos' : recebe - deve < -EPS ? 'neg' : ''}">${brl(Math.abs(recebe - deve) <= EPS ? 0 : recebe - deve)}</td></tr>`;
   }).join('');
   const acs = c.acertos.slice().sort((a, b) => (b.data || '').localeCompare(a.data || '') || String(b.id).localeCompare(String(a.id)));
   return `${aviso()}
@@ -318,7 +338,11 @@ function telaResumo(){
   <div class="panel"><h2>Pagamentos registrados</h2>
     ${acs.length ? acs.map(r => `<div class="acerto"><div class="grow" style="min-width:0"><div>${esc(nomeCasal(r.pagador))} → ${esc(nomeCasal(lista(r.dividir)[0]))}</div>
       <div class="s" style="font-size:12.5px;color:var(--muted)">${esc(fmtDia(r.data))}</div></div><div class="val">${brl(r.valorBRL)}</div>
-      <button class="btn ghost sm" data-act="acerto-apagar" data-id="${esc(r.id)}">Desfazer</button></div>`).join('') : '<div class="muted">Nenhum ainda.</div>'}</div>`;
+      <button class="btn ghost sm" data-act="acerto-apagar" data-id="${esc(r.id)}">Desfazer</button></div>`).join('') : '<div class="muted">Nenhum ainda.</div>'}</div>
+  ${c.simples.length && c.simples.length < c.pares.length ? `<div class="panel"><h2>Sugestão mais simples</h2>
+    <div class="muted" style="font-size:13px;margin-bottom:4px">Dá para zerar todo mundo com ${c.simples.length} transferência${c.simples.length > 1 ? 's' : ''} em vez de ${c.pares.length}:</div>
+    ${c.simples.map(linhaPar).join('')}
+    <div class="muted" style="font-size:12px;margin-top:8px">O resultado final é o mesmo para cada casal. Registre os pagamentos por aqui ou por “Quem paga quem”, não pelos dois.</div></div>` : ''}`;
 }
 function abrirAcerto(de, para, v){
   S.form = {acerto:true, de, para};

@@ -1,5 +1,5 @@
 // Abre o app mesmo sem sinal. Os dados ficam no aparelho (localStorage) e sobem quando a internet volta.
-const V = 'chile-v6';
+const V = 'chile-v7';
 const SHELL = ['./', 'index.html', 'icon.png', 'manifest.webmanifest'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(V).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => {
