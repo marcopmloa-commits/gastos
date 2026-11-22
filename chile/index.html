@@ -104,8 +104,8 @@ nav button.on{color:var(--accent)}
 <header class="top"><div class="top-in"><h1>Chile 🇨🇱 · Gastos</h1><div class="who" id="who"></div></div></header>
 <main id="main"></main>
 <nav id="nav" hidden><div class="in">
-  <button data-tab="resumo"><b>👥</b>Casais</button>
   <button data-tab="gastos"><b>🧾</b>Gastos</button>
+  <button data-tab="resumo"><b>👥</b>Casais</button>
   <button data-tab="config"><b>⚙️</b>Ajustes</button>
 </div></nav>
 <div class="ov" id="ov" hidden><div class="sheet" id="sheet"></div></div>
@@ -253,6 +253,10 @@ function telaQuem(){
     <p class="muted" style="margin:0">Escolha o seu casal. Ele vai aparecer como padrão em "quem pagou".</p>
     ${S.cfg.casais.map(c => `<button class="bigbtn" data-act="eu" data-id="${esc(c.id)}">${esc(c.nome)}</button>`).join('')}</div>`;
 }
+function aviso(){
+  if (!S.outbox.length && S.sync !== 'off') return '';
+  return `<div class="panel muted" style="font-size:13px">${S.sync === 'off' ? '📴 Sem conexão. ' : ''}${S.outbox.length ? '⏳ ' + S.outbox.length + ' lançamento(s) salvo(s) neste aparelho, sobem sozinhos quando voltar o sinal.' : 'Você pode continuar lançando; sincroniza quando voltar o sinal.'}</div>`;
+}
 function itemPend(it, mostrar){
   const r = it.row;
   return `<div class="acerto"><div class="grow" style="min-width:0"><div class="t" style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.descricao || 'Gasto')}</div>
@@ -263,7 +267,7 @@ function itemPend(it, mostrar){
 function telaResumo(){
   const c = calc(S.rows), sel = S.sel || S.me;
   const aDever = c.itens.filter(i => i.de === sel && !i.pago), aReceber = c.itens.filter(i => i.para === sel && !i.pago);
-  const pend = S.outbox.length ? `<div class="panel muted" style="font-size:13px">⏳ ${S.outbox.length} alteração(ões) aguardando conexão para sincronizar.</div>` : '';
+  const pend = aviso();
   const porCredor = {}; aDever.forEach(i => { (porCredor[i.para] = porCredor[i.para] || []).push(i); });
   const porDevedor = {}; aReceber.forEach(i => { (porDevedor[i.de] = porDevedor[i.de] || []).push(i); });
   return `${pend}
@@ -278,7 +282,7 @@ function telaResumo(){
     <div class="muted" style="font-size:12px;margin-top:8px">Toque em “Pago” quando o dinheiro for transferido. Vale para quem paga ou para quem recebe.</div></div>`;
 }
 function telaGastos(){
-  const top = `<div class="panel">${formHTML(S.draft, true)}</div>`;
+  const top = aviso() + `<div class="panel">${formHTML(S.draft, true)}</div>`;
   const rows = S.rows.filter(r => !r.deletado && r.tipo === 'gasto').sort((a, b) => (b.data || '').localeCompare(a.data || '') || String(b.id).localeCompare(String(a.id)));
   if (!rows.length) return top + '<div class="panel muted">Nenhum gasto lançado ainda.</div>';
   let out = top, dia = '';
@@ -421,6 +425,8 @@ document.addEventListener('click', async e => {
 });
 
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+window.addEventListener('online', () => load());
+window.addEventListener('offline', () => { setSync('off'); if (!S.form) render(); });
 document.addEventListener('visibilitychange', () => { if (!document.hidden && !S.form) load(); });
 setInterval(() => { if (!document.hidden && !S.form) load(); }, 30000);
 render(); load();
