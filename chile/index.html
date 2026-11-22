@@ -174,6 +174,20 @@ function calc(rows){
 }
 
 // ---------- rede
+// traduz falhas do Google em instruções
+function explicar(msg, html, status){
+  const t = String(html || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  const all = msg + ' ' + t;
+  if (/Failed to fetch|Load failed|NetworkError|Sign in|Fazer login|accounts\.google|Faça login/i.test(all))
+    return 'O Google bloqueou o acesso. No Apps Script: Implantar > Gerenciar implantações > ✏️ e deixe "Executar como: Eu" e "Quem pode acessar: Qualquer pessoa" (não "com conta do Google"). Se estiver sem internet, ignore.';
+  if (/Script function not found|doGet|doPost/i.test(all))
+    return 'O endereço não tem o código do app. Cole o Code.gs no Apps Script e crie uma "Nova versão" da implantação.';
+  if (/getSheetByName|null|openById|não foi possível|Unable to open|permiss|authoriz|autoriza/i.test(all))
+    return 'O script não consegue abrir a planilha. No editor do Apps Script rode a função "configurar" (autorize) e depois Implantar > Gerenciar implantações > ✏️ > Versão: "Nova versão". Detalhe: ' + (msg || t).slice(0, 160);
+  if (t) return 'HTTP ' + (status || '?') + ' · resposta inesperada do Google: ' + t.slice(0, 200);
+  return msg;
+}
+const pronto = m => Object.assign(new Error(m), {pronto:true});
 let flushing = false;
 function setSync(s){ S.sync = s; const d = $('#dot'); if (d) d.className = 'dot ' + (s === 'ok' ? '' : s); }
 async function flush(){
@@ -183,11 +197,13 @@ async function flush(){
     while (S.outbox.length) {
       const p = S.outbox[0];
       const r = await fetch(S.api, {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify({...p, c:S.code})});
-      const j = await r.json();
+      const txt = await r.text(); let j;
+      try { j = JSON.parse(txt); } catch(pe) { throw pronto(explicar('', txt, r.status)); }
       if (!j.ok && j.erro === 'codigo') { S.err = 'Código incorreto.'; break; }
+      if (!j.ok && j.erro === 'servidor') throw pronto(explicar(j.detalhe || '', '', 200));
       S.outbox.shift(); ls.set('cl_outbox', S.outbox);
     }
-  } catch(e) { setSync('off'); }
+  } catch(e) { S.lastErr = e && e.pronto ? e.message : explicar(String((e && e.message) || e)); setSync('off'); }
   flushing = false;
 }
 async function load(){
@@ -197,12 +213,13 @@ async function load(){
     setSync('sync');
     const r = await fetch(S.api + (S.api.includes('?') ? '&' : '?') + 'c=' + encodeURIComponent(S.code), {cache:'no-store'});
     const txt = await r.text(); let j;
-    try { j = JSON.parse(txt); } catch(pe) { throw new Error('HTTP ' + r.status + ' · resposta não é JSON: ' + txt.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200)); }
-    S.lastErr = '';
+    try { j = JSON.parse(txt); } catch(pe) { throw pronto(explicar('', txt, r.status)); }
     if (!j.ok) {
       if (j.erro === 'codigo') { S.err = 'Código incorreto. Confira com quem criou o app.'; S.code = ''; ls.set('cl_code', ''); }
+      else S.lastErr = explicar(j.detalhe || ('erro ' + j.erro));
       setSync('off'); render(); return;
     }
+    S.lastErr = '';
     S.err = '';
     if (!S.outbox.length) {
       S.cfg = j.config; S.rows = j.linhas;
@@ -210,7 +227,7 @@ async function load(){
       if (S.draft && S.draft.novo && !S.draft.valor && !S.draft.desc) S.draft = novoDraft();
     }
     S.loaded = true; setSync('ok');
-  } catch(e) { S.lastErr = String((e && e.message) || e); setSync('off'); }
+  } catch(e) { S.lastErr = e && e.pronto ? e.message : explicar(String((e && e.message) || e)); setSync('off'); }
   const ae = document.activeElement;
   if (!S.form && !(ae && /INPUT|SELECT/.test(ae.tagName))) render();
 }
@@ -238,7 +255,7 @@ function render(){
   $('#nav').hidden = !(ready && S.me);
   if (S.cfg && !S.draft) S.draft = novoDraft(); else if (S.draft && S.draft.novo && !S.draft.valor && !S.draft.desc) { S.draft.pagador = S.draft.pagador || S.me; }
   if (!ready) { main.innerHTML = telaConectar(); return; }
-  if (!S.cfg) { main.innerHTML = `<div class="panel stack"><div class="muted">${S.sync === 'off' ? '📴 Sem conexão com a planilha. Conecte à internet para entrar pela primeira vez.' : 'Carregando…'}</div>${S.lastErr ? `<div class="err" style="word-break:break-word;font-size:13px">Detalhe: ${esc(S.lastErr)}</div>` : ''}<button class="btn ghost" data-act="atualizar">Tentar de novo</button></div>`; return; }
+  if (!S.cfg) { main.innerHTML = `<div class="panel stack"><div class="muted">${S.sync === 'off' ? (S.lastErr ? '⚠️ Não consegui falar com a planilha.' : '📴 Sem conexão com a planilha. Conecte à internet para entrar pela primeira vez.') : 'Carregando…'}</div>${S.lastErr ? `<div class="err" style="word-break:break-word;font-size:13px">${esc(S.lastErr)}</div>` : ''}<button class="btn ghost" data-act="atualizar">Tentar de novo</button><button class="btn ghost" data-act="sair">Trocar endereço / código</button></div>`; return; }
   if (!S.me) { main.innerHTML = telaQuem(); return; }
   document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.tab === S.tab));
   main.innerHTML = S.tab === 'resumo' ? telaResumo() : S.tab === 'gastos' ? telaGastos() : telaConfig();
@@ -258,6 +275,7 @@ function telaQuem(){
 }
 function aviso(){
   if (!S.outbox.length && S.sync !== 'off') return '';
+  if (S.lastErr && S.sync === 'off') return `<div class="panel err" style="font-size:13px;word-break:break-word">⚠️ ${esc(S.lastErr)}${S.outbox.length ? '<br>⏳ ' + S.outbox.length + ' lançamento(s) guardado(s) neste aparelho.' : ''}</div>`;
   return `<div class="panel muted" style="font-size:13px">${S.sync === 'off' ? '📴 Sem conexão. ' : ''}${S.outbox.length ? '⏳ ' + S.outbox.length + ' lançamento(s) salvo(s) neste aparelho, sobem sozinhos quando voltar o sinal.' : 'Você pode continuar lançando; sincroniza quando voltar o sinal.'}</div>`;
 }
 function itemPend(it, mostrar){
@@ -391,6 +409,7 @@ document.addEventListener('click', async e => {
   if (act === 'conectar') {
     const u = $('#in-api').value.trim(), c = $('#in-code').value.trim();
     if (!/^https:\/\/script\.google\.com\//.test(u) || !c) { S.err = 'Preencha o endereço (https://script.google.com/…) e o código.'; render(); return; }
+    if (!/\/exec\/?$/.test(u)) { S.err = /\/dev\/?$/.test(u) ? 'Esse é o endereço de teste (/dev), que só funciona para você. Use o da implantação, que termina em /exec.' : 'Use o endereço do "App da Web", que termina em /exec (Implantar > Gerenciar implantações).'; render(); return; }
     S.api = u; S.code = c; S.err = ''; ls.set('cl_api', u); ls.set('cl_code', c); load();
   }
   else if (act === 'eu') { S.me = id; ls.set('cl_me', id); render(); }
@@ -415,7 +434,7 @@ document.addEventListener('click', async e => {
     catch(err) { try { await navigator.clipboard.writeText(link); el.textContent = 'Link copiado ✓'; } catch(e2) { prompt('Copie o link:', link); } }
   }
   else if (act === 'atualizar') { load(); }
-  else if (act === 'sair') { if (el.dataset.arm !== '1') { el.dataset.arm = '1'; el.textContent = 'Toque de novo para sair'; return; } ['cl_api','cl_code','cl_me','cl_cfg','cl_rows','cl_outbox'].forEach(k => localStorage.removeItem(k)); location.reload(); }
+  else if (act === 'sair') { if (el.dataset.arm !== '1') { el.dataset.arm = '1'; el.textContent = 'Toque de novo para sair'; return; } ['cl_api','cl_code','cl_me','cl_cfg','cl_rows','cl_outbox'].forEach(k => { try { localStorage.removeItem(k); } catch(e3){} }); location.href = location.pathname; }
   else if (act === 'f-moeda') { if (f.moeda !== id) { f.moeda = id; f.valor = ''; f.real = ''; redraw(); } }
   else if (act === 'f-pagador') { f.pagador = id; redraw(); }
   else if (act === 'f-div') { f.dividir = f.dividir.includes(id) ? f.dividir.filter(x => x !== id) : [...f.dividir, id]; redraw(); }
