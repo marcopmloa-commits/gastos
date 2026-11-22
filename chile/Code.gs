@@ -13,8 +13,8 @@ const CAB = ['id', 'tipo', 'data', 'descricao', 'categoria', 'pagador', 'moeda',
 const CFG_PADRAO = {
   casais: [
     { id: 'c1', nome: 'Marco e Nicole' },
-    { id: 'c2', nome: 'Norton e Má' },
-    { id: 'c3', nome: 'Ana e João' }
+    { id: 'c2', nome: 'Ana e João' },
+    { id: 'c3', nome: 'Norton e Má' }
   ],
   cotacao: 5.8 // R$ por 1.000 pesos chilenos (ajustável no app)
 };
