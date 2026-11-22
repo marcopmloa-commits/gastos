@@ -6,6 +6,7 @@
  * (Executar como: Eu · Quem pode acessar: Qualquer pessoa).
  */
 const CODIGO = 'chile2026'; // <- TROQUE por um código só de vocês (os 6 digitam uma vez)
+const PLANILHA_ID = '1TUVDtKdWA6EVSaovWMPIsOlT_gLmOphLMfWMg-BJC6A'; // planilha "Gastos Chile"
 const ABA = 'Lancamentos';
 const ABA_CFG = 'Config';
 const CAB = ['id', 'tipo', 'data', 'descricao', 'categoria', 'pagador', 'moeda', 'valor',
@@ -19,7 +20,9 @@ const CFG_PADRAO = {
   cotacao: 5.8 // R$ por 1.000 pesos chilenos (ajustável no app)
 };
 
-function planilha_() { return SpreadsheetApp.getActiveSpreadsheet(); }
+function planilha_() {
+  return PLANILHA_ID ? SpreadsheetApp.openById(PLANILHA_ID) : SpreadsheetApp.getActiveSpreadsheet();
+}
 
 function aba_() {
   const ss = planilha_();
