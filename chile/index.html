@@ -152,25 +152,35 @@ function fmtDia(d){
   catch(e){ return d; }
 }
 
-// ---------- cálculo: quem deve a quem, gasto a gasto
+// ---------- cálculo: saldo corrido entre os casais (cada compra abate o que o outro deve)
 const lista = v => (Array.isArray(v) ? v : String(v || '').split(',')).map(x => String(x).trim()).filter(Boolean);
 function calc(rows){
   const ids = S.cfg.casais.map(c => c.id);
-  const deve = {}, receber = {};
-  ids.forEach(i => { deve[i] = 0; receber[i] = 0; });
-  const itens = []; let total = 0;
-  rows.filter(r => !r.deletado && r.tipo === 'gasto').forEach(r => {
-    const v = +r.valorBRL || 0, part = lista(r.dividir).filter(x => ids.includes(x));
+  const m = {}; ids.forEach(a => { m[a] = {}; ids.forEach(b => m[a][b] = 0); }); // m[a][b] = quanto a deve a b (bruto)
+  const gastoPor = {}; ids.forEach(i => gastoPor[i] = 0);
+  let total = 0; const acertos = [];
+  rows.filter(r => !r.deletado).forEach(r => {
+    const v = +r.valorBRL || 0;
+    if (r.tipo === 'acerto') {
+      const para = lista(r.dividir)[0];
+      if (ids.includes(r.pagador) && ids.includes(para) && para !== r.pagador) { m[r.pagador][para] -= v; acertos.push(r); }
+      return;
+    }
+    if (r.tipo !== 'gasto') return;
+    const part = lista(r.dividir).filter(x => ids.includes(x));
     if (!part.length || !ids.includes(r.pagador)) return;
-    total += v;
-    const pagos = lista(r.pagos), cota = v / part.length;
-    part.filter(d => d !== r.pagador).forEach(d => {
-      const pago = pagos.includes(d);
-      itens.push({row:r, de:d, para:r.pagador, v:cota, pago});
-      if (!pago) { deve[d] += cota; receber[r.pagador] += cota; }
-    });
+    total += v; gastoPor[r.pagador] += v;
+    const pagos = lista(r.pagos), cota = v / part.length; // "pagos" = marcações antigas, já quitadas
+    part.filter(d => d !== r.pagador && !pagos.includes(d)).forEach(d => { m[d][r.pagador] += cota; });
   });
-  return {total, deve, receber, itens};
+  // líquido por par: um valor só, já abatido
+  const pares = [], saldo = {}; ids.forEach(i => saldo[i] = 0);
+  ids.forEach((a, x) => ids.slice(x + 1).forEach(b => {
+    const n = m[a][b] - m[b][a];
+    if (Math.abs(n) > 0.005) pares.push(n > 0 ? {de:a, para:b, v:n} : {de:b, para:a, v:-n});
+    saldo[a] -= n; saldo[b] += n;
+  }));
+  return {total, pares, saldo, gastoPor, acertos, m};
 }
 
 // ---------- rede
@@ -281,29 +291,45 @@ function aviso(){
   if (S.lastErr && S.sync === 'off') return `<div class="panel err" style="font-size:13px;word-break:break-word">⚠️ ${esc(S.lastErr)}${S.outbox.length ? '<br>⏳ ' + S.outbox.length + ' lançamento(s) guardado(s) neste aparelho.' : ''}</div>`;
   return `<div class="panel muted" style="font-size:13px">${S.sync === 'off' ? '📴 Sem conexão. ' : ''}${S.outbox.length ? '⏳ ' + S.outbox.length + ' lançamento(s) salvo(s) neste aparelho, sobem sozinhos quando voltar o sinal.' : 'Você pode continuar lançando; sincroniza quando voltar o sinal.'}</div>`;
 }
-function itemPend(it, mostrar){
-  const r = it.row;
-  return `<div class="acerto"><div class="grow" style="min-width:0"><div class="t" style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.descricao || 'Gasto')}</div>
-    <div class="s" style="font-size:12.5px;color:var(--muted)">${esc(fmtDia(r.data))} · ${esc(mostrar === 'de' ? nomeCasal(it.de) + ' deve' : 'a pagar para ' + nomeCasal(it.para))}</div></div>
-    <div class="val">${brl(it.v)}</div>
-    <button class="btn sm" data-act="pago" data-id="${esc(r.id)}" data-c="${esc(it.de)}">Pago</button></div>`;
-}
 function telaResumo(){
   const c = calc(S.rows), sel = S.sel || S.me;
-  const aDever = c.itens.filter(i => i.de === sel && !i.pago), aReceber = c.itens.filter(i => i.para === sel && !i.pago);
-  const pend = aviso();
-  const porCredor = {}; aDever.forEach(i => { (porCredor[i.para] = porCredor[i.para] || []).push(i); });
-  const porDevedor = {}; aReceber.forEach(i => { (porDevedor[i.de] = porDevedor[i.de] || []).push(i); });
-  return `${pend}
+  const linhaPar = p => `<div class="acerto ${p.de === S.me || p.para === S.me ? 'me' : ''}"><div class="grow" style="min-width:0">
+      <div><b>${esc(nomeCasal(p.de))}</b> <span class="muted">deve a</span> <b>${esc(nomeCasal(p.para))}</b></div></div>
+      <div class="val neg">${brl(p.v)}</div>
+      <button class="btn sm" data-act="acertar" data-de="${esc(p.de)}" data-para="${esc(p.para)}" data-v="${p.v.toFixed(2)}">Pagar</button></div>`;
+  const ext = S.cfg.casais.filter(k => k.id !== sel).map(k => {
+    const deve = c.m[sel][k.id], recebe = c.m[k.id][sel];
+    if (Math.abs(deve) < 0.005 && Math.abs(recebe) < 0.005) return '';
+    return `<tr><td>${esc(k.nome)}</td><td>${brl(recebe)}</td><td>${brl(deve)}</td><td class="${recebe - deve > 0.005 ? 'pos' : recebe - deve < -0.005 ? 'neg' : ''}">${brl(recebe - deve)}</td></tr>`;
+  }).join('');
+  const acs = c.acertos.slice().sort((a, b) => (b.data || '').localeCompare(a.data || '') || String(b.id).localeCompare(String(a.id)));
+  return `${aviso()}
   <div class="panel"><div class="lbl">Total gasto pelo grupo</div><div class="total">${brl(c.total)}</div></div>
-  <div class="panel"><h2>Casais</h2><div class="chips" style="margin-bottom:12px">${S.cfg.casais.map(k => `<button class="chip ${k.id === sel ? 'on' : ''}" data-act="sel" data-id="${esc(k.id)}">${esc(k.nome)}</button>`).join('')}</div>
-    <table><tr><th>Casal</th><th>Deve</th><th>A receber</th></tr>
-    ${S.cfg.casais.map(k => `<tr><td>${esc(k.nome)}</td><td class="${c.deve[k.id] > 0.005 ? 'neg' : ''}">${brl(c.deve[k.id])}</td><td class="${c.receber[k.id] > 0.005 ? 'pos' : ''}">${brl(c.receber[k.id])}</td></tr>`).join('')}</table></div>
-  <div class="panel"><h2>${esc(nomeCasal(sel))} deve pagar</h2>
-    ${aDever.length ? Object.keys(porCredor).map(k => `<div class="lbl" style="margin-top:8px">Para ${esc(nomeCasal(k))} · ${brl(porCredor[k].reduce((a, i) => a + i.v, 0))}</div>${porCredor[k].map(i => itemPend(i, 'para')).join('')}`).join('') : '<div class="muted">Nada pendente ✅</div>'}</div>
-  <div class="panel"><h2>${esc(nomeCasal(sel))} tem a receber</h2>
-    ${aReceber.length ? Object.keys(porDevedor).map(k => `<div class="lbl" style="margin-top:8px">De ${esc(nomeCasal(k))} · ${brl(porDevedor[k].reduce((a, i) => a + i.v, 0))}</div>${porDevedor[k].map(i => itemPend(i, 'de')).join('')}`).join('') : '<div class="muted">Ninguém deve nada ✅</div>'}
-    <div class="muted" style="font-size:12px;margin-top:8px">Toque em “Pago” quando o dinheiro for transferido. Vale para quem paga ou para quem recebe.</div></div>`;
+  <div class="panel"><h2>Quem paga quem</h2>
+    ${c.pares.length ? c.pares.map(linhaPar).join('') : '<div class="muted">Tudo acertado ✅ Ninguém deve nada.</div>'}
+    <div class="muted" style="font-size:12px;margin-top:8px">Já está tudo abatido: o que um casal gasta pelo outro desconta do que ele devia. Quando transferirem, toque em “Pagar” para registrar (pode ser só uma parte).</div></div>
+  <div class="panel"><h2>Saldo de cada casal</h2>
+    <table><tr><th>Casal</th><th>Pagou</th><th>Saldo</th></tr>
+    ${S.cfg.casais.map(k => `<tr><td>${esc(k.nome)}</td><td>${brl(c.gastoPor[k.id])}</td><td class="${c.saldo[k.id] > 0.005 ? 'pos' : c.saldo[k.id] < -0.005 ? 'neg' : ''}">${c.saldo[k.id] > 0.005 ? '+' : ''}${brl(c.saldo[k.id])}</td></tr>`).join('')}</table>
+    <div class="muted" style="font-size:12px;margin-top:6px">Saldo positivo = tem a receber · negativo = deve.</div></div>
+  <div class="panel"><h2>Conta corrente</h2><div class="chips" style="margin-bottom:12px">${S.cfg.casais.map(k => `<button class="chip ${k.id === sel ? 'on' : ''}" data-act="sel" data-id="${esc(k.id)}">${esc(k.nome)}</button>`).join('')}</div>
+    ${ext ? `<table><tr><th>Com</th><th>A receber</th><th>A pagar</th><th>Saldo</th></tr>${ext}</table>
+      <div class="muted" style="font-size:12px;margin-top:6px">Já descontando os pagamentos registrados. Saldo positivo = ${esc(nomeCasal(sel))} recebe.</div>` : '<div class="muted">Nenhum movimento ainda.</div>'}</div>
+  <div class="panel"><h2>Pagamentos registrados</h2>
+    ${acs.length ? acs.map(r => `<div class="acerto"><div class="grow" style="min-width:0"><div>${esc(nomeCasal(r.pagador))} → ${esc(nomeCasal(lista(r.dividir)[0]))}</div>
+      <div class="s" style="font-size:12.5px;color:var(--muted)">${esc(fmtDia(r.data))}</div></div><div class="val">${brl(r.valorBRL)}</div>
+      <button class="btn ghost sm" data-act="acerto-apagar" data-id="${esc(r.id)}">Desfazer</button></div>`).join('') : '<div class="muted">Nenhum ainda.</div>'}</div>`;
+}
+function abrirAcerto(de, para, v){
+  S.form = {acerto:true, de, para};
+  $('#sheet').innerHTML = `<h2>Registrar pagamento</h2><div class="stack">
+    <div class="prev"><b>${esc(nomeCasal(de))}</b> paga para <b>${esc(nomeCasal(para))}</b></div>
+    <div><div class="lbl">Valor transferido (R$)</div><input id="a-valor" inputmode="decimal" value="${String(v).replace('.', ',')}"></div>
+    <div class="muted" style="font-size:12.5px">Saldo atual: ${brl(+v)}. Pode pagar só uma parte; o resto continua em aberto.</div>
+    <div><div class="lbl">Data</div><input id="a-data" type="date" value="${hoje()}"></div>
+    <div class="err" id="a-err"></div>
+    <div class="row"><button class="btn full grow" data-act="acerto-salvar">Registrar</button><button class="btn ghost" data-act="form-fechar">Fechar</button></div></div>`;
+  $('#ov').hidden = false;
 }
 function telaGastos(){
   const top = aviso() + `<div class="panel">${formHTML(S.draft, true)}</div>`;
@@ -312,14 +338,11 @@ function telaGastos(){
   let out = top, dia = '';
   rows.forEach(r => {
     if (r.data !== dia) { dia = r.data; out += `<div class="day">${esc(fmtDia(dia))}</div>`; }
-    const part = lista(r.dividir), pagos = lista(r.pagos), devs = part.filter(d => d !== r.pagador);
-    const cota = (+r.valorBRL || 0) / (part.length || 1);
+    const part = lista(r.dividir);
     out += `<div class="item2"><button class="item" data-act="editar" data-id="${esc(r.id)}" style="border:0;background:none;padding:0"><div class="grow" style="min-width:0">
-      <div class="t">${esc(r.descricao || 'Gasto')}</div><div class="s">${esc(nomeCasal(r.pagador))} pagou · dividido em ${part.length}</div></div>
+      <div class="t">${esc(r.descricao || 'Gasto')}</div><div class="s">${esc(nomeCasal(r.pagador))} pagou · ${brl((+r.valorBRL || 0) / (part.length || 1))} p/ cada um de ${part.length}</div></div>
       <div class="r"><span class="val">${brl(r.valorBRL)}</span>${r.moeda === 'CLP' ? `<small>${clp(r.valor)}</small>` : ''}</div></button>
-      ${devs.length ? `<div class="chips" style="margin-top:10px">${devs.map(d => pagos.includes(d)
-        ? `<button class="chip ok" data-act="pago" data-id="${esc(r.id)}" data-c="${esc(d)}">✅ ${esc(nomeCasal(d))} pagou</button>`
-        : `<button class="chip pend" data-act="pago" data-id="${esc(r.id)}" data-c="${esc(d)}">${esc(nomeCasal(d))} · ${brl(cota)} · Pago?</button>`).join('')}</div>` : ''}</div>`;
+      </div>`;
   });
   return out;
 }
@@ -423,6 +446,15 @@ document.addEventListener('click', async e => {
     r.pagos = (pg.includes(c) ? pg.filter(x => x !== c) : [...pg, c]).join(',');
     salvarLinha(r); render();
   }
+  else if (act === 'acertar') abrirAcerto(el.dataset.de, el.dataset.para, el.dataset.v);
+  else if (act === 'acerto-salvar') {
+    const v = Math.round(parseNum($('#a-valor').value, 'BRL') * 100) / 100, d = $('#a-data').value || hoje();
+    if (!(v > 0)) { $('#a-err').textContent = 'Informe o valor.'; return; }
+    const f = S.form;
+    salvarLinha({id:novoId(), tipo:'acerto', data:d, descricao:'Pagamento', categoria:'', pagador:f.de, moeda:'BRL', valor:v, cotacao:'', valorBRL:v, dividir:f.para, por:S.me, deletado:false, pagos:''});
+    fecharForm();
+  }
+  else if (act === 'acerto-apagar') { if (el.dataset.arm !== '1') { el.dataset.arm = '1'; el.textContent = 'Confirmar?'; return; } apagarLinha(id); render(); }
   else if (act === 'editar') { const r = S.rows.find(x => x.id === id); if (r) abrirForm(r); }
   else if (act === 'salvar-cfg') {
     const cfg = JSON.parse(JSON.stringify(S.cfg));
