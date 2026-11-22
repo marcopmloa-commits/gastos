@@ -1,5 +1,5 @@
 // Abre o app mesmo sem sinal. Os dados ficam no aparelho (localStorage) e sobem quando a internet volta.
-const V = 'chile-v8';
+const V = 'chile-v9';
 const SHELL = ['./', 'index.html', 'icon.png', 'manifest.webmanifest'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(V).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => {
@@ -10,6 +10,11 @@ self.addEventListener('fetch', e => {
   if (req.method !== 'GET' || u.origin !== location.origin) return;
   e.respondWith((async () => {
     const c = await caches.open(V);
+    // abrir o app: busca a versão nova primeiro (cache só se estiver sem internet)
+    if (req.mode === 'navigate') {
+      try { const r = await fetch(req, {cache: 'no-store'}); if (r.ok) c.put('index.html', r.clone()); return r; }
+      catch (err) { return (await c.match('index.html')) || (await c.match(req, {ignoreSearch: true})) || Response.error(); }
+    }
     const hit = await c.match(req, {ignoreSearch: true});
     const net = fetch(req).then(r => { if (r.ok) c.put(req.mode === 'navigate' ? 'index.html' : req, r.clone()); return r; }).catch(() => null);
     if (hit) { e.waitUntil(net); return hit; }
