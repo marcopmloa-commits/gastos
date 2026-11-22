@@ -123,11 +123,24 @@ const ls = {
 // ---- convite por link: ?u=<url do app da web>&c=<código>
 (function(){
   const p = new URLSearchParams(location.search);
-  if (p.get('u') && p.get('c')) {
-    ls.set('cl_api', p.get('u')); ls.set('cl_code', p.get('c'));
-    history.replaceState(null, '', location.pathname);
-  }
+  if (p.get('u') && p.get('c')) { ls.set('cl_api', p.get('u')); ls.set('cl_code', p.get('c')); }
+  manterConvite();
 })();
+// O ícone da tela de início (iPhone) abre o endereço que estava na tela e não compartilha
+// a memória do Safari: por isso o convite fica no endereço e o manifest aponta para ele.
+function manterConvite(){
+  const u = ls.get('cl_api', ''), c = ls.get('cl_code', '');
+  if (!u || !c) return;
+  const q = '?u=' + encodeURIComponent(u) + '&c=' + encodeURIComponent(c);
+  if (location.search !== q) history.replaceState(null, '', location.pathname + q);
+  const link = document.querySelector('link[rel=manifest]');
+  if (link) {
+    const base = location.origin + location.pathname;
+    const m = {name:'Gastos Chile', short_name:'Chile', start_url:base + q, scope:base, display:'standalone',
+      background_color:'#DCE1E7', theme_color:'#2F5D73', icons:[{src:base.replace(/[^/]*$/, '') + 'icon.png', sizes:'512x512', type:'image/png'}]};
+    link.href = URL.createObjectURL(new Blob([JSON.stringify(m)], {type:'application/manifest+json'}));
+  }
+}
 
 const S = {
   lastErr: '',
@@ -460,7 +473,7 @@ document.addEventListener('click', async e => {
     const u = $('#in-api').value.trim(), c = $('#in-code').value.trim();
     if (!/^https:\/\/script\.google\.com\//.test(u) || !c) { S.err = 'Preencha o endereço (https://script.google.com/…) e o código.'; render(); return; }
     if (!/\/exec\/?$/.test(u)) { S.err = /\/dev\/?$/.test(u) ? 'Esse é o endereço de teste (/dev), que só funciona para você. Use o da implantação, que termina em /exec.' : 'Use o endereço do "App da Web", que termina em /exec (Implantar > Gerenciar implantações).'; render(); return; }
-    S.api = u; S.code = c; S.err = ''; ls.set('cl_api', u); ls.set('cl_code', c); load();
+    S.api = u; S.code = c; S.err = ''; ls.set('cl_api', u); ls.set('cl_code', c); manterConvite(); load();
   }
   else if (act === 'eu') { S.me = id; ls.set('cl_me', id); render(); }
   else if (act === 'sel') { S.sel = id; render(); }
