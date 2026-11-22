@@ -131,7 +131,7 @@ const ls = {
 
 const S = {
   api: ls.get('cl_api', ''), code: ls.get('cl_code', ''), me: ls.get('cl_me', ''),
-  cfg: ls.get('cl_cfg', CFG0), rows: ls.get('cl_rows', []), outbox: ls.get('cl_outbox', []),
+  cfg: ls.get('cl_cfg', null), rows: ls.get('cl_rows', []), outbox: ls.get('cl_outbox', []),
   tab: 'gastos', sync: 'sync', err: '', form: null, loaded: false
 };
 
@@ -230,12 +230,12 @@ const novoId = () => Date.now().toString(36) + Math.random().toString(36).slice(
 
 // ---------- telas
 function render(){
-  $('#who').innerHTML = S.api && S.code ? `<span id="dot" class="dot ${S.sync === 'ok' ? '' : S.sync}"></span>${S.me ? esc(nomeCasal(S.me)) : ''}` : '';
+  $('#who').innerHTML = S.api && S.code ? `<span id="dot" class="dot ${S.sync === 'ok' ? '' : S.sync}"></span>${S.cfg && S.me ? esc(nomeCasal(S.me)) : ''}` : '';
   const main = $('#main'); const ready = S.api && S.code;
   $('#nav').hidden = !(ready && S.me);
-  if (!S.draft) S.draft = novoDraft(); else if (S.draft.novo && !S.draft.valor && !S.draft.desc) { S.draft.pagador = S.draft.pagador || S.me; }
+  if (S.cfg && !S.draft) S.draft = novoDraft(); else if (S.draft && S.draft.novo && !S.draft.valor && !S.draft.desc) { S.draft.pagador = S.draft.pagador || S.me; }
   if (!ready) { main.innerHTML = telaConectar(); return; }
-  if (!S.loaded && !S.rows.length && !S.cfg.casais.length) { main.innerHTML = '<div class="panel muted">Carregando…</div>'; return; }
+  if (!S.cfg) { main.innerHTML = `<div class="panel stack"><div class="muted">${S.sync === 'off' ? '📴 Sem conexão com a planilha. Conecte à internet para entrar pela primeira vez.' : 'Carregando…'}</div><button class="btn ghost" data-act="atualizar">Tentar de novo</button></div>`; return; }
   if (!S.me) { main.innerHTML = telaQuem(); return; }
   document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.tab === S.tab));
   main.innerHTML = S.tab === 'resumo' ? telaResumo() : S.tab === 'gastos' ? telaGastos() : telaConfig();
