@@ -11,7 +11,7 @@
  */
 const CODIGO = 'chile2026'; // <- TROQUE por um código só de vocês (os 6 digitam uma vez)
 const PLANILHA_ID = '1TUVDtKdWA6EVSaovWMPIsOlT_gLmOphLMfWMg-BJC6A'; // planilha "Gastos Chile"
-const VERSAO = 4;
+const VERSAO = 5;
 const ABA = 'Lancamentos';
 const ABA_CFG = 'Config';
 const CAB = ['id', 'tipo', 'data', 'descricao', 'categoria', 'pagador', 'moeda', 'valor',
@@ -101,8 +101,10 @@ function json_(obj) {
 function doGet(e) {
   try {
     const p = (e && e.parameter) || {};
-    if (!p.c) return json_({ ok: false, erro: 'codigo', info: 'Servidor Gastos Chile funcionando ✅ (versão ' + VERSAO + ')' });
-    if (p.c !== CODIGO) return json_({ ok: false, erro: 'codigo' });
+    // o Google reserva o parâmetro "c" nas URLs /exec, por isso o código vem em "k"
+    const cod = p.k;
+    if (!cod) return json_({ ok: false, erro: 'codigo', info: 'Servidor Gastos Chile funcionando ✅ (versão ' + VERSAO + ')' });
+    if (cod !== CODIGO) return json_({ ok: false, erro: 'codigo' });
     return json_({ ok: true, versao: VERSAO, config: lerConfig_(), linhas: lerLinhas_(), agora: new Date().toISOString() });
   } catch (err) {
     return json_({ ok: false, erro: 'servidor', detalhe: String(err && err.message || err) });

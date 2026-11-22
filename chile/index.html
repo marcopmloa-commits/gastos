@@ -184,6 +184,8 @@ function explicar(msg, html, status){
     return 'O endereço não tem o código do app. Cole o Code.gs no Apps Script e crie uma "Nova versão" da implantação.';
   if (/getSheetByName|null|openById|não foi possível|Unable to open|permiss|authoriz|autoriza/i.test(all))
     return 'O script não consegue abrir a planilha. No editor do Apps Script rode a função "configurar" (autorize) e depois Implantar > Gerenciar implantações > ✏️ > Versão: "Nova versão". Detalhe: ' + (msg || t).slice(0, 160);
+  if (status === 400 || /unable to open the file/i.test(all))
+    return 'O servidor está com o código antigo. Cole o Code.gs novo no Apps Script e faça Implantar > Gerenciar implantações > ✏️ > Versão: "Nova versão" > Implantar.';
   if (t) return 'HTTP ' + (status || '?') + ' · resposta inesperada do Google: ' + t.slice(0, 200);
   return msg;
 }
@@ -211,11 +213,12 @@ async function load(){
   await flush();
   try {
     setSync('sync');
-    const r = await fetch(S.api + (S.api.includes('?') ? '&' : '?') + 'c=' + encodeURIComponent(S.code), {cache:'no-store'});
+    const r = await fetch(S.api + (S.api.includes('?') ? '&' : '?') + 'k=' + encodeURIComponent(S.code), {cache:'no-store'});
     const txt = await r.text(); let j;
     try { j = JSON.parse(txt); } catch(pe) { throw pronto(explicar('', txt, r.status)); }
     if (!j.ok) {
-      if (j.erro === 'codigo') { S.err = 'Código incorreto. Confira com quem criou o app.'; S.code = ''; ls.set('cl_code', ''); }
+      if (j.erro === 'codigo' && j.info) S.lastErr = explicar('', '', 400); // servidor antigo: não recebeu o código
+      else if (j.erro === 'codigo') { S.err = 'Código incorreto. Confira com quem criou o app.'; S.code = ''; ls.set('cl_code', ''); }
       else S.lastErr = explicar(j.detalhe || ('erro ' + j.erro));
       setSync('off'); render(); return;
     }
